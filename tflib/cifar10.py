@@ -32,7 +32,7 @@ def cifar_generator(filenames, batch_size, data_dir, probability_array, ratio, e
             for i in xrange(len(images) / batch_size):
                 yield np.copy(images[i*batch_size:(i+1)*batch_size]);
         else:
-            index = np.arange(len(probability_array_01));
+            #index = np.arange(len(probability_array_01));
             probability_array_01 = softmax(probability_array);
             len_index = len(probability_array_01);
             index_ = np.random.choice(len_index, int(ratio*len_index), replace=False, p=probability_array_01);

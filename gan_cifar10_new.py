@@ -32,6 +32,10 @@ CRITIC_ITERS = 5 # How many critic iterations per generator iteration
 BATCH_SIZE = 64 # Batch size
 ITERS = 200000 # How many generator iterations to train for
 OUTPUT_DIM = 3072 # Number of pixels in CIFAR10 (3*32*32)
+inception_score_all = [];
+results_save = './results_new/cifar10_2'
+if not os.path.isdir(results_save):
+    os.makedirs(results_save);
 
 # SP parameters --------------------
 r_1 = 0.5
@@ -39,10 +43,7 @@ SP_begin = 0.1
 SP_end = 0.8
 n_SP_iter = 5 # number of self-paced iterations
 Scores = []
-
-
 # ----------------------------------
-
 
 class Generator(nn.Module):
     def __init__(self):
@@ -109,7 +110,7 @@ print netD
 
 use_cuda = torch.cuda.is_available()
 if use_cuda:
-    gpu = 0
+    gpu = 9
 if use_cuda:
     netD = netD.cuda(gpu)
     netG = netG.cuda(gpu)
@@ -156,7 +157,7 @@ def generate_image(frame, netG):
     samples = samples.mul(0.5).add(0.5)
     samples = samples.cpu().data.numpy()
 
-    lib.save_images.save_images(samples, './results_new/cifar10/samples_{}.jpg'.format(frame))
+    lib.save_images.save_images(samples, (results_save + '/samples_{}.jpg').format(frame))
 
 # For calculating inception score
 def get_inception_score(G, ):
@@ -215,11 +216,14 @@ for iteration in xrange(ITERS):
                     imgs = imgs.cuda(gpu)
                 imgs_v = autograd.Variable(imgs, volatile=True)
 
-                D = netD(imgs_v)	
+                D = netD(imgs_v)
 
-                Scores.append(D.cpu().data.numpy())
+                batch_scores = D.cpu().data.numpy().flatten()
+
+                Scores = np.concatenate((Scores, batch_scores), axis=0)
             # -------------------------------------------------------
             r_t = r_t + (1-r_1) / n_SP_iter
+            #Scores = (-1) * Scores
             train_gen, dev_gen = lib.cifar10.load(BATCH_SIZE, DATA_DIR, Scores, r_t, 0)
             gen = inf_train_gen();
     ########################################################################################################
@@ -288,15 +292,16 @@ for iteration in xrange(ITERS):
     optimizerG.step()
 
     # Write logs and save samples
-    lib.plot.plot('./results_new/cifar10/train disc cost', D_cost.cpu().data.numpy())
-    lib.plot.plot('./results_new/cifar10/time', time.time() - start_time)
-    lib.plot.plot('./results_new/cifar10/train gen cost', G_cost.cpu().data.numpy())
-    lib.plot.plot('./results_new/cifar10/wasserstein distance', Wasserstein_D.cpu().data.numpy())
+    lib.plot.plot(results_save + '/train disc cost', D_cost.cpu().data.numpy())
+    lib.plot.plot(results_save + '/time', time.time() - start_time)
+    lib.plot.plot(results_save + '/train gen cost', G_cost.cpu().data.numpy())
+    lib.plot.plot(results_save + '/wasserstein distance', Wasserstein_D.cpu().data.numpy())
 
     # Calculate inception score every 1K iters
     if True and iteration % 50000 == 49999:
         inception_score = get_inception_score(netG)
-        lib.plot.plot('./results_new/cifar10/inception score', inception_score[0])
+        inception_score_all = np.append(inception_score_all, inception_score[0]);
+        lib.plot.plot(results_save + '/inception score', inception_score[0])
 
     # Calculate dev loss and generate samples every 100 iters
     if iteration % 100 == 99:
@@ -313,7 +318,7 @@ for iteration in xrange(ITERS):
             D = netD(imgs_v)
             _dev_disc_cost = -D.mean().cpu().data.numpy()
             dev_disc_costs.append(_dev_disc_cost)
-        lib.plot.plot('./results_new/cifar10/dev disc cost', np.mean(dev_disc_costs))
+        lib.plot.plot(results_save + '/dev disc cost', np.mean(dev_disc_costs))
 
         generate_image(iteration, netG)
 
@@ -321,3 +326,5 @@ for iteration in xrange(ITERS):
     if (iteration < 5) or (iteration % 100 == 99):
         lib.plot.flush()
     lib.plot.tick()
+print inception_score_all
+np.savetxt('inception_score.txt', inception_score_all, delimiter=',');

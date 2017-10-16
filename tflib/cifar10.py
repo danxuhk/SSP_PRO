@@ -14,7 +14,11 @@ def unpickle(file):
 ##added by Dan ###
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
-    return np.exp(x) / np.sum(np.exp(x), axis=0)
+    #e_x = np.exp(x - np.max(x));
+    #return e_x / np.sum(e_x);
+    theta = 0.0001;
+    ps = np.exp(x * theta)
+    return ps / np.sum(ps)
 
 def cifar_generator(filenames, batch_size, data_dir, probability_array, ratio, eval_bool):
     all_data = []
@@ -32,12 +36,13 @@ def cifar_generator(filenames, batch_size, data_dir, probability_array, ratio, e
             for i in xrange(len(images) / batch_size):
                 yield np.copy(images[i*batch_size:(i+1)*batch_size]);
         else:
-            #index = np.arange(len(probability_array_01));
             probability_array_01 = softmax(probability_array);
             len_index = len(probability_array_01);
-            index_ = np.random.choice(len_index, int(ratio*len_index), replace=False, p=probability_array_01);
+            #print probability_array_01[0:50]
+            size_generate = int(ratio*len_index);
+            index_ = np.random.choice(len_index, size_generate, replace=False, p=probability_array_01);
             images_selected = images[index_];
-            np.random.shuffle(images_selected)  
+            np.random.shuffle(images_selected)  ##not sure if this is needed...
             for i in xrange(len(images_selected) / batch_size):
                 yield np.copy(images_selected[i*batch_size:(i+1)*batch_size])
     return get_epoch

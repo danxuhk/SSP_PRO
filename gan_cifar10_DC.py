@@ -184,7 +184,7 @@ preprocess = torchvision.transforms.Compose([
 
 for iteration in xrange(ITERS):
     start_time = time.time()
-	
+
     ############################
     # (1) Update D networks
     ###########################
@@ -192,70 +192,70 @@ for iteration in xrange(ITERS):
         p.requires_grad = True  # they are set to False below in netG update
     for p in netD2.parameters():  # reset requires_grad
         p.requires_grad = True  # they are set to False below in netG update
-		
-	
+
+
     for i in xrange(CRITIC_ITERS):
 
-		#netD1.zero_grad() # this should be here or later?
-		#netD2.zero_grad()
-		
-		data1 = []
-		data2 = []
+	#netD1.zero_grad() # this should be here or later?
+	#netD2.zero_grad()
 
-		# split data according to dicriminative clustering ----------------------
-		for v in xrange(2):
-			_data = gen.next()
-			_data = _data.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
-			real_data = torch.stack([preprocess(item) for item in _data])
+	data1 = []
+	data2 = []
 
-			if use_cuda:
-				real_data = real_data.cuda(gpu)
-			r_data_v = autograd.Variable(real_data)
-
-			D1 = netD1(r_data_v)
-			scores1 = D1.cpu().data.numpy().flatten()		
-			
-			D2 = netD2(r_data_v)
-			scores2 = D2.cpu().data.numpy().flatten()		
-					
-			for d in xrange(BATCH_SIZE):
-				if (scores1[d] > scores2[d] and data1.len() < BATCH_SIZE) or data2.len() >= BATCH_SIZE:
-                                    data1.append(_data[d, :, :, :])
-                                else:
-                                    data2.append(_data[d, :, :, :])
-								
-		# ------------------------------------------------------
-			
-		
-		# update D1 with real data -----------------------------
-		
-		netD1.zero_grad()
-		
-		data1 = data1.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
-		real_data1 = torch.stack([preprocess(item) for item in data1])
+	# split data according to dicriminative clustering ----------------------
+	for v in xrange(2):
+		_data = gen.next()
+		_data = _data.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
+		real_data = torch.stack([preprocess(item) for item in _data])
 
 		if use_cuda:
-			real_data1 = real_data1.cuda(gpu)
-		real_data_v1 = autograd.Variable(real_data1)
+			real_data = real_data.cuda(gpu)
+		r_data_v = autograd.Variable(real_data)
 
-		D_real1 = netD1(real_data_v1)
-		D_real1 = D_real1.mean()
-		D_real1.backward(mone)		
-			
-		# update D2 with real data -----------------------------
+		D1 = netD1(r_data_v)
+		scores1 = D1.cpu().data.numpy().flatten()		
+
+		D2 = netD2(r_data_v)
+		scores2 = D2.cpu().data.numpy().flatten()		
+
+		for d in xrange(BATCH_SIZE):
+			if (scores1[d] > scores2[d] and data1.len() < BATCH_SIZE) or data2.len() >= BATCH_SIZE:
+				data1.append(_data[d, :, :, :])
+			else:
+				data2.append(_data[d, :, :, :])
+						
+	# ------------------------------------------------------
+
 		
-		netD2.zero_grad()
+	# update D1 with real data -----------------------------
 		
-		data2 = data2.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
-		real_data2 = torch.stack([preprocess(item) for item in data2])
+	netD1.zero_grad()
 
-		if use_cuda:
-			real_data2 = real_data2.cuda(gpu)
-		real_data_v2 = autograd.Variable(real_data2)
+	data1 = data1.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
+	real_data1 = torch.stack([preprocess(item) for item in data1])
 
-		D_real2 = netD2(real_data_v2)
-		D_real2 = D_real2.mean()
-		D_real2.backward(mone)		
+	if use_cuda:
+		real_data1 = real_data1.cuda(gpu)
+	real_data_v1 = autograd.Variable(real_data1)
+
+	D_real1 = netD1(real_data_v1)
+	D_real1 = D_real1.mean()
+	D_real1.backward(mone)		
+	
+	# update D2 with real data -----------------------------
+	
+	netD2.zero_grad()
+
+	data2 = data2.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
+	real_data2 = torch.stack([preprocess(item) for item in data2])
+
+	if use_cuda:
+		real_data2 = real_data2.cuda(gpu)
+	real_data_v2 = autograd.Variable(real_data2)
+
+	D_real2 = netD2(real_data_v2)
+	D_real2 = D_real2.mean()
+	D_real2.backward(mone)		
 
 
         # train with fake -----------------------------
@@ -266,7 +266,7 @@ for iteration in xrange(ITERS):
         fake = autograd.Variable(netG(noisev).data)
         inputv1 = fake
         inputv2 = fake
-		
+	
         D_fake1 = netD1(inputv1)
         D_fake1 = D_fake1.mean()
         D_fake1.backward(one)
@@ -274,27 +274,27 @@ for iteration in xrange(ITERS):
         D_fake2 = netD2(inputv2)
         D_fake2 = D_fake2.mean()
         D_fake2.backward(one)
-		
+
         # train with gradient penalty -----------------------------
-		
+
         gradient_penalty1 = calc_gradient_penalty(netD1, real_data_v1.data, fake.data) # should I use fake1 and fake2 ???
         gradient_penalty1.backward()
 
         gradient_penalty2 = calc_gradient_penalty(netD2, real_data_v2.data, fake.data)
         gradient_penalty2.backward()
-		
-		
+	
+	
         # print "gradien_penalty: ", gradient_penalty
 
-		D_cost = 0.5 * (D_fake1 - D_real1 + gradient_penalty1) + 0.5 * (D_fake2 - D_real2 + gradient_penalty2)
-		
-		Wasserstein_D = 0.5 * (D_real1 - D_fake1) + 0.5 * (D_real2 - D_fake2)
+	D_cost = 0.5 * (D_fake1 - D_real1 + gradient_penalty1) + 0.5 * (D_fake2 - D_real2 + gradient_penalty2)
+
+	Wasserstein_D = 0.5 * (D_real1 - D_fake1) + 0.5 * (D_real2 - D_fake2)
 
         optimizerD1.step()
         optimizerD2.step()
-		
-		
-		
+
+
+
     ############################
     # (2) Update G network
     ###########################
@@ -302,15 +302,15 @@ for iteration in xrange(ITERS):
         p.requires_grad = False  # to avoid computation
     for p in netD2.parameters():
         p.requires_grad = False  # to avoid computation
-
-	netG.zero_grad()
+	
+    netG.zero_grad()
 
     noise = torch.randn(BATCH_SIZE, 128)
     if use_cuda:
         noise = noise.cuda(gpu)
     noisev = autograd.Variable(noise)
     fake = netG(noisev) # should i use fake1 and fake2 ???
-	
+
     G1 = netD1(fake)
     G1 = G1.mean()
     G1.backward(mone)
@@ -350,7 +350,7 @@ for iteration in xrange(ITERS):
 
             D1 = netD1(imgs_v) # this can also be avoided if it is time consuming...
             D2 = netD2(imgs_v)
-			
+	
             _dev_disc_cost = 0.5 * (-D1.mean().cpu().data.numpy()) + 0.5 * (-D2.mean().cpu().data.numpy())
             dev_disc_costs.append(_dev_disc_cost)
         lib.plot.plot(results_save + '/dev disc cost', np.mean(dev_disc_costs))

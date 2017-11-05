@@ -124,6 +124,12 @@ if use_cuda:
 optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
 optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
 
+netD_old = netD
+netG_old = netG
+if use_cuda:
+    netD_old = netD_old.cuda(gpu)
+    netG_old = netG_old.cuda(gpu)
+
 def calc_gradient_penalty(netD, real_data, fake_data):
     # print "real_data: ", real_data.size(), fake_data.size()
     alpha = torch.rand(BATCH_SIZE, 1)
@@ -210,42 +216,60 @@ for t in range(2, n_SP_iter + 1):
 
 next_eval_iter[n_SP_iter+1] = SP_iter_end + 1
 t = 1
+
+iter_1 = 0
+old_IS = 0
 						   
 for iteration in xrange(ITERS):
     start_time = time.time()
     ########################################################################################################
     ############################################ SP ##################################################
 
-    if iteration >= SP_iter_begin and iteration < SP_iter_end:
-        #n_samples= np.round(tot_samples * r_t)
+    if iter_1 >= SP_iter_begin and iter_1 < SP_iter_end:
 
         # compute scores for each real sample image at every SP iteration -------------
-        if iteration  == next_eval_iter[t]:
-            t = t + 1 
+        if iter_1  == next_eval_iter[t]:
+		
+		# Calculate inception score 
+		inception_score = get_inception_score(netG)
+		inception_score_all = np.append(inception_score_all, inception_score[0]);
+		lib.plot.plot(results_save + '/inception score', inception_score[0])
+			
+		if inception_score[0] < old_IS:
+			# restore the old status
+			netD = netD_old
+			netG = netG_old
+			iter_1 = next_eval_iter[t-1]
+		else: 
+			netD_old = netD
+			netG_old = netG
+			old_IS = inception_score[0]				
+			t = t + 1 
 
-# lines that i've changed -----------------------------------------------------------------------
-            Scores = []
-            for images in eval_gen():
-                # is there any interference between loops of the train_gen python generator? Anyway, don't forget that the "evaluation" below should be computed for (all!) the training imgs and not for the testing ones
-                images = images.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
-                imgs = torch.stack([preprocess(item) for item in images])
+				
+		Scores = []
+		for images in eval_gen():
+			images = images.reshape(BATCH_SIZE, 3, 32, 32).transpose(0, 2, 3, 1)
+			imgs = torch.stack([preprocess(item) for item in images])
 
-                # imgs = preprocess(images)
-                if use_cuda:
-                    imgs = imgs.cuda(gpu)
-                imgs_v = autograd.Variable(imgs, volatile=True)
+			# imgs = preprocess(images)
+			if use_cuda:
+				imgs = imgs.cuda(gpu)
+			imgs_v = autograd.Variable(imgs, volatile=True)
 
-                D = netD(imgs_v)
-
-                batch_scores = D.cpu().data.numpy().flatten()
-
-                Scores = np.concatenate((Scores, batch_scores), axis=0)
-            # -------------------------------------------------------
-            r_t = r_t + (1-r_1) / n_SP_iter
-            #Scores = (-1) * Scores
-            train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, r_t, 0)
-            gen = inf_train_gen();
+			D = netD(imgs_v)
+			batch_scores = D.cpu().data.numpy().flatten()
+			Scores = np.concatenate((Scores, batch_scores), axis=0)
+			
+			
+		r_t = r_t + (1-r_1) / n_SP_iter
+		#Scores = (-1) * Scores
+		train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, r_t, 0)
+		gen = inf_train_gen();
+				
     ########################################################################################################
+
+    iter_1 = iter_1 + 1 # this should be intended EXTERNALLY to the "if iter_1 >= SP_iter_begin and iter_1 < SP_iter_end:"
 
     ############################
     # (1) Update D network
@@ -316,8 +340,8 @@ for iteration in xrange(ITERS):
     lib.plot.plot(results_save + '/train gen cost', G_cost.cpu().data.numpy())
     lib.plot.plot(results_save + '/wasserstein distance', Wasserstein_D.cpu().data.numpy())
 
-    # Calculate inception score every 1K iters
-    if True and iteration % 25000 == 24999:
+    # Calculate inception score every 15K iters after the self-paced process
+    if iter_1 > SP_iter_end and iteration % 15000 == 14999:
         inception_score = get_inception_score(netG)
         inception_score_all = np.append(inception_score_all, inception_score[0]);
         lib.plot.plot(results_save + '/inception score', inception_score[0])

@@ -33,7 +33,7 @@ BATCH_SIZE = 64 # Batch size
 ITERS = 200000 # How many generator iterations to train for
 OUTPUT_DIM = 3072 # Number of pixels in CIFAR10 (3*32*32)
 inception_score_all = [];
-results_save = './results_new/cifar10_4_30'
+results_save = './results_new/cifar10_4_detectdrop'
 if not os.path.isdir(results_save):
     os.makedirs(results_save);
 

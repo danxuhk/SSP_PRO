@@ -9,7 +9,7 @@ import tflib.ops.cond_batchnorm
 import tflib.ops.conv2d
 import tflib.ops.batchnorm
 import tflib.save_images
-import tflib.cifar10
+import tflib.cifar10_all
 import tflib.inception_score
 import tflib.plot
 
@@ -48,14 +48,14 @@ INCEPTION_FREQUENCY = 5000 # How frequently to calculate Inception score
 inception_score_all = [];
 
 # -------------------------------------------------------
-CONDITIONAL = False # Whether to train a conditional or unconditional model
+CONDITIONAL = True # Whether to train a conditional or unconditional model
 LAMBDA = 100 # ??? To set...
 # -------------------------------------------------------
 
 ACGAN = True # If CONDITIONAL, whether to use ACGAN or "vanilla" conditioning
 ACGAN_SCALE = 1. # How to scale the critic's ACGAN loss relative to WGAN loss
 ACGAN_SCALE_G = 0.1 # How to scale generator's ACGAN loss relative to WGAN loss
-results_save = './results_new/cifar_resnet_supervised'
+results_save = './results_new/cifar_resnet_supervised_SP'
 if not os.path.isdir(results_save):
         os.makedirs(results_save);
 
@@ -339,7 +339,7 @@ with tf.Session() as session:
     def generate_image(frame, true_dist):
         samples = session.run(fixed_noise_samples)
         samples = ((samples+1.)*(255./2)).astype('int32')
-        lib.save_images.save_images(samples.reshape((100, 3, 32, 32)), 'samples_{}.png'.format(frame))
+        lib.save_images.save_images(samples.reshape((100, 3, 32, 32)), results_save + '/samples_{}.png'.format(frame))
 
     # Function for calculating inception score
     fake_labels_100 = tf.cast(tf.random_uniform([100])*10, tf.int32)
@@ -353,11 +353,11 @@ with tf.Session() as session:
         all_samples = all_samples.reshape((-1, 3, 32, 32)).transpose(0,2,3,1)
         return lib.inception_score.get_inception_score(list(all_samples))
 
-	# -----------------------------------------------------------------------------
-	eval_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, 1, 1)
-	train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, 1, 0)		
-	#train_gen, dev_gen = lib.cifar10.load(BATCH_SIZE, DATA_DIR)
-	# -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    eval_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, 1, 1)
+    train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, 1, 0)		
+    #train_gen, dev_gen = lib.cifar10.load(BATCH_SIZE, DATA_DIR)
+    # -----------------------------------------------------------------------------
   
     def inf_train_gen():
         while True:
@@ -416,27 +416,26 @@ with tf.Session() as session:
     for iteration in xrange(ITERS):
         start_time = time.time()
 
-        
-		#----------------------------------------- SP -----------------------------------------
 
-		if iteration >= SP_iter_begin and iteration < SP_iter_end:
+	#----------------------------------------- SP -----------------------------------------
 
-			# compute scores for each real sample image at every SP iteration -------------
-			if iteration  == next_eval_iter[t]:
-				t = t + 1 
+	if iteration >= SP_iter_begin and iteration < SP_iter_end:
 
-				Scores = []
-				for images,_labels in eval_gen():
-				
-                score_batch = session.run([disc_cost], feed_dict={all_real_data_int: images,all_real_labels:_labels})
-                Scores.append(score_batch)
-
-				r_t = r_t + (1-r_1) / n_SP_iter
-				#Scores = (-1) * Scores
-				train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, r_t, 0)
-				gen = inf_train_gen();
-		#  -----------------------------------------------------------------------        
-        
+            # compute scores for each real sample image at every SP iteration -------------
+            if iteration  == next_eval_iter[t]:
+           	 t = t + 1 
+           
+           	 Scores = []
+           	 for images,_labels in eval_gen():
+                        score_batch = session.run([disc_cost], feed_dict={all_real_data_int: images,all_real_labels:_labels})
+                        Scores.append(score_batch)
+           
+           	 r_t = r_t + (1-r_1) / n_SP_iter
+           	 #Scores = (-1) * Scores
+           	 train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, r_t, 0)
+           	 gen = inf_train_gen();
+           	 #  -----------------------------------------------------------------------        
+                   
         
         if iteration > 0:
             _ = session.run([gen_train_op], feed_dict={_iteration:iteration})
@@ -468,7 +467,7 @@ with tf.Session() as session:
             for images,_labels in dev_gen():
                 _dev_disc_cost = session.run([disc_cost], feed_dict={all_real_data_int: images,all_real_labels:_labels})
                 dev_disc_costs.append(_dev_disc_cost)
-            lib.plot.plot('dev_cost', np.mean(dev_disc_costs))
+            lib.plot.plot(results_save + '/dev_cost', np.mean(dev_disc_costs))
 
             generate_image(iteration, _data)
 

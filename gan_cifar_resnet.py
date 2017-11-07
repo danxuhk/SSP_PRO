@@ -47,7 +47,10 @@ N_CRITIC = 5 # Critic steps per generator steps
 INCEPTION_FREQUENCY = 5000 # How frequently to calculate Inception score
 inception_score_all = [];
 
-CONDITIONAL = True # Whether to train a conditional or unconditional model
+# -------------------------------------------------------
+CONDITIONAL = False # Whether to train a conditional or unconditional model
+# -------------------------------------------------------
+
 ACGAN = True # If CONDITIONAL, whether to use ACGAN or "vanilla" conditioning
 ACGAN_SCALE = 1. # How to scale the critic's ACGAN loss relative to WGAN loss
 ACGAN_SCALE_G = 0.1 # How to scale generator's ACGAN loss relative to WGAN loss
@@ -63,6 +66,15 @@ if len(DEVICES) == 1: # Hack because the code assumes 2 GPUs
     DEVICES = [DEVICES[0], DEVICES[0]]
 
 lib.print_model_settings(locals().copy())
+
+# SP parameters --------------------
+r_1 = 0.5
+SP_begin = 0.025
+SP_end = 0.8
+n_SP_iter = 5 # number of self-paced iterations
+Scores = []
+# ----------------------------------
+
 
 def nonlinearity(x):
     return tf.nn.relu(x)
@@ -335,7 +347,12 @@ with tf.Session() as session:
         all_samples = all_samples.reshape((-1, 3, 32, 32)).transpose(0,2,3,1)
         return lib.inception_score.get_inception_score(list(all_samples))
 
-    train_gen, dev_gen = lib.cifar10.load(BATCH_SIZE, DATA_DIR)
+	# -----------------------------------------------------------------------------
+	eval_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, 1, 1)
+	train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, 1, 0)		
+	#train_gen, dev_gen = lib.cifar10.load(BATCH_SIZE, DATA_DIR)
+	# -----------------------------------------------------------------------------
+  
     def inf_train_gen():
         while True:
             for images,_labels in train_gen():
@@ -365,10 +382,56 @@ with tf.Session() as session:
     session.run(tf.initialize_all_variables())
 
     gen = inf_train_gen()
+    
+    #  -----------------------------------------------------------------------
+    r_t = r_1 
+    SP_iter_begin = np.round(ITERS * SP_begin)						   
+    SP_iter_end = np.round(ITERS * SP_end)	
+    tot_SP_iter = SP_iter_end - SP_iter_begin
+
+    r = r_1
+    s = 0
+    for t in range(1, n_SP_iter+1):
+        s = s + r
+        r = r + (1-r_1) / n_SP_iter
+
+    r = r_1
+    next_eval_iter = np.zeros(n_SP_iter+2)
+    next_eval_iter[1] = SP_iter_begin
+    for t in range(2, n_SP_iter + 1):
+        next_eval_iter[t] = next_eval_iter[t-1] + np.round(tot_SP_iter * (r / s))
+        r = r + (1-r_1) / n_SP_iter
+
+    next_eval_iter[n_SP_iter+1] = SP_iter_end + 1
+    t = 1	
+    #  -----------------------------------------------------------------------
+    
 
     for iteration in xrange(ITERS):
         start_time = time.time()
 
+        
+		#----------------------------------------- SP -----------------------------------------
+
+		if iteration >= SP_iter_begin and iteration < SP_iter_end:
+
+			# compute scores for each real sample image at every SP iteration -------------
+			if iteration  == next_eval_iter[t]:
+				t = t + 1 
+
+				Scores = []
+				for images,_labels in eval_gen():
+				
+                score_batch = session.run([disc_cost], feed_dict={all_real_data_int: images,all_real_labels:_labels})
+                Scores.append(score_batch)
+
+				r_t = r_t + (1-r_1) / n_SP_iter
+				#Scores = (-1) * Scores
+				train_gen, dev_gen = lib.cifar10_all.load(BATCH_SIZE, DATA_DIR, Scores, r_t, 0)
+				gen = inf_train_gen();
+		#  -----------------------------------------------------------------------        
+        
+        
         if iteration > 0:
             _ = session.run([gen_train_op], feed_dict={_iteration:iteration})
 

@@ -49,6 +49,7 @@ inception_score_all = [];
 
 # -------------------------------------------------------
 CONDITIONAL = False # Whether to train a conditional or unconditional model
+LAMBDA = 100 # ??? To set...
 # -------------------------------------------------------
 
 ACGAN = True # If CONDITIONAL, whether to use ACGAN or "vanilla" conditioning
@@ -277,8 +278,13 @@ with tf.Session() as session:
             interpolates = real_data + (alpha*differences)
             gradients = tf.gradients(Discriminator(interpolates, labels)[0], [interpolates])[0]
             slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
-            gradient_penalty = 10*tf.reduce_mean((slopes-1.)**2)
-            disc_costs.append(gradient_penalty)
+			
+	    # -----------------------------------------------------------------------------
+            gradient_penalty = LAMBDA*tf.reduce_mean((slopes-1.)**2)
+            #gradient_penalty = 10*tf.reduce_mean((slopes-1.)**2)
+	    # -----------------------------------------------------------------------------
+
+	    disc_costs.append(gradient_penalty)
 
     disc_wgan = tf.add_n(disc_costs) / len(DEVICES_A)
     if CONDITIONAL and ACGAN:

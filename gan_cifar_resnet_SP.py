@@ -427,7 +427,14 @@ with tf.Session() as session:
            
            	 Scores = []
            	 for images,_labels in eval_gen():
-                        score_batch = session.run([disc_cost], feed_dict={all_real_data_int: images,all_real_labels:_labels})
+				
+			if CONDITIONAL:
+				score_batch = Discriminator(images, _labels)
+			else:					
+				fake_labels = tf.cast(tf.random_uniform([BATCH_SIZE])*10, tf.int32)
+				score_batch = Discriminator(images, fake_labels) 				
+				
+                        #score_batch = session.run([disc_cost], feed_dict={all_real_data_int: images,all_real_labels:_labels})
                         Scores.append(score_batch)
            
            	 r_t = r_t + (1-r_1) / n_SP_iter
